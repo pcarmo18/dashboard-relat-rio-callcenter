@@ -38,11 +38,17 @@
             <p class="text-gray-500 mt-2">Preencha os dados abaixo para gerar o dashboard do mês.</p>
         </header>
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">1. Informações Gerais e Metas</h2>
+            <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">1. Mês e Metas do Relatório</h2>
              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                    <label for="report-title" class="block text-sm font-medium text-gray-700">Título do Relatório (Ex: Mês de Julho)</label>
-                    <input type="text" id="report-title" value="Resultado Call Center da IGP Fibra - Mês de Julho" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                    <label for="month-select" class="block text-sm font-medium text-gray-700">Selecione o Mês/Ano</label>
+                    <select id="month-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        <!-- Options will be populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="report-title" class="block text-sm font-medium text-gray-700">Título do Relatório</label>
+                    <input type="text" id="report-title" value="Resultado Call Center da IGP Fibra" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -63,9 +69,15 @@
         <div class="bg-white rounded-xl shadow-lg p-6">
             <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">2. Dados dos Atendentes</h2>
             <div id="agents-form-container" class="space-y-4"></div>
-            <div class="mt-6 flex justify-between">
-                <button id="add-agent-btn" type="button" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Adicionar Atendente</button>
-                <button id="generate-report-btn" type="button" class="px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Gerar Relatório</button>
+            <div class="mt-6 flex flex-wrap gap-4 justify-between">
+                <div class="flex gap-4">
+                    <button id="save-report-btn" type="button" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">💾 Guardar Dados do Mês</button>
+                    <button id="load-report-btn" type="button" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">📂 Carregar Mês Guardado</button>
+                </div>
+                 <div class="flex gap-4">
+                    <button id="add-agent-btn" type="button" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Adicionar Atendente</button>
+                    <button id="generate-report-btn" type="button" class="px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Gerar Relatório</button>
+                </div>
             </div>
         </div>
     </div>
@@ -89,6 +101,81 @@
     ];
 
     const agentsContainer = document.getElementById('agents-form-container');
+    const monthSelect = document.getElementById('month-select');
+
+    // --- MONTHS AND STORAGE ---
+    const populateMonths = () => {
+        const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().getMonth();
+
+        for (let year = currentYear; year >= currentYear - 1; year--) {
+            for (let i = 11; i >= 0; i--) {
+                if (year === currentYear && i > currentMonth) continue;
+                const monthValue = `${year}-${String(i + 1).padStart(2, '0')}`;
+                const monthName = `${months[i]} de ${year}`;
+                const option = document.createElement('option');
+                option.value = monthValue;
+                option.textContent = monthName;
+                monthSelect.appendChild(option);
+            }
+        }
+        monthSelect.value = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+    };
+
+    const saveReport = () => {
+        const monthKey = monthSelect.value;
+        const storageKey = `dashboard_data_${monthKey}`;
+        
+        const reportData = {
+            title: document.getElementById('report-title').value,
+            goals: {
+                goalNote: document.getElementById('goal-note').value,
+                goalTma: document.getElementById('goal-tma').value,
+                goalCalls: document.getElementById('goal-calls').value,
+            },
+            agents: []
+        };
+        
+        document.querySelectorAll('.agent-row').forEach(row => {
+            reportData.agents.push({
+                name: row.querySelector('[name="agentName"]').value,
+                calls: row.querySelector('[name="agentCalls"]').value,
+                score: row.querySelector('[name="agentScore"]').value,
+                tma: row.querySelector('[name="agentTma"]').value,
+            });
+        });
+
+        localStorage.setItem(storageKey, JSON.stringify(reportData));
+        alert(`Relatório para ${monthSelect.options[monthSelect.selectedIndex].text} guardado com sucesso!`);
+    };
+
+    const loadReport = () => {
+        const monthKey = monthSelect.value;
+        const storageKey = `dashboard_data_${monthKey}`;
+        
+        const savedData = localStorage.getItem(storageKey);
+        if (!savedData) {
+            alert(`Nenhum relatório guardado para ${monthSelect.options[monthSelect.selectedIndex].text}.`);
+            return;
+        }
+
+        const reportData = JSON.parse(savedData);
+        
+        document.getElementById('report-title').value = reportData.title;
+        document.getElementById('goal-note').value = reportData.goals.goalNote;
+        document.getElementById('goal-tma').value = reportData.goals.goalTma;
+        document.getElementById('goal-calls').value = reportData.goals.goalCalls;
+
+        agentsContainer.innerHTML = '';
+        reportData.agents.forEach(agent => addAgentRow(agent));
+
+        alert(`Relatório para ${monthSelect.options[monthSelect.selectedIndex].text} carregado!`);
+    };
+
+    document.getElementById('save-report-btn').addEventListener('click', saveReport);
+    document.getElementById('load-report-btn').addEventListener('click', loadReport);
+
     
     const addAgentRow = (agent = {}) => {
         const agentDiv = document.createElement('div');
@@ -104,10 +191,16 @@
     };
 
     document.getElementById('add-agent-btn').addEventListener('click', () => addAgentRow());
+    
+    // Initial setup
+    populateMonths();
     initialAgents.forEach(addAgentRow);
 
+
     document.getElementById('generate-report-btn').addEventListener('click', () => {
-        AppState.reportTitle = document.getElementById('report-title').value;
+        const monthName = monthSelect.options[monthSelect.selectedIndex].text;
+        AppState.reportTitle = `${document.getElementById('report-title').value} - ${monthName}`;
+
         AppState.goals = {
             goalNote: parseFloat(document.getElementById('goal-note').value),
             goalTma: parseFloat(document.getElementById('goal-tma').value),
@@ -311,4 +404,4 @@
 
 </script>
 </body>
-</html>
+</ht
