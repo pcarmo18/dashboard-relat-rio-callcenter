@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Dashboard com IA - Call Center</title>
+    <title>Gerador de Dashboard - Call Center</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -27,42 +27,6 @@
 
         #form-container { display: block; }
         #dashboard-container { display: none; }
-        #ai-analysis-section { display: none; }
-        
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            border-left-color: #4f46e5;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-        }
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 0.75rem;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        strong {
-            font-weight: 700;
-            color: #1e3a8a; /* Indigo-900 */
-        }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -111,27 +75,11 @@
          <button id="edit-data-btn" type="button" class="mb-6 px-5 py-2.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">← Voltar e Preencher Novos Dados</button>
          <div id="dashboard-content"></div>
     </div>
-    
-    <!-- MODAL FOR AI FEEDBACK -->
-    <div id="feedback-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <div class="flex justify-between items-center mb-4">
-                <h2 id="modal-title" class="text-2xl font-bold text-gray-800">Feedback com IA</h2>
-                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-            </div>
-            <div id="modal-body" class="space-y-4"></div>
-        </div>
-    </div>
 
 <script>
-    // Store data globally to be accessible by AI functions
-    let AppState = {
-        agentsData: [],
-        goals: {},
-        reportTitle: ''
-    };
+    // MAIN APP LOGIC
+    let AppState = { agentsData: [], goals: {}, reportTitle: '', teamTotals: {} };
     
-    // Initial Data for demonstration
     const initialAgents = [
         { name: 'ELENILSON', calls: 940, score: 4.38, tma: '18m 16s' },
         { name: 'MATHEUS', calls: 601, score: 4.50, tma: '23m 34s' },
@@ -142,7 +90,6 @@
 
     const agentsContainer = document.getElementById('agents-form-container');
     
-    // Function to add a new agent form row
     const addAgentRow = (agent = {}) => {
         const agentDiv = document.createElement('div');
         agentDiv.className = 'grid grid-cols-1 md:grid-cols-5 gap-3 p-3 border rounded-lg bg-gray-50 agent-row';
@@ -159,9 +106,7 @@
     document.getElementById('add-agent-btn').addEventListener('click', () => addAgentRow());
     initialAgents.forEach(addAgentRow);
 
-    // Main generate report function
     document.getElementById('generate-report-btn').addEventListener('click', () => {
-        // 1. Read Goals and Title
         AppState.reportTitle = document.getElementById('report-title').value;
         AppState.goals = {
             goalNote: parseFloat(document.getElementById('goal-note').value),
@@ -169,19 +114,21 @@
             goalCalls: parseFloat(document.getElementById('goal-calls').value)
         };
 
-        // 2. Read Agent Data from form
         const agentRows = document.querySelectorAll('.agent-row');
         AppState.agentsData = [];
-        let totalScoreSum = 0;
+        let totalScoreSum = 0, totalCalls = 0, totalTmaSeconds = 0;
         agentRows.forEach(row => {
             const name = row.querySelector('[name="agentName"]').value;
             const calls = parseInt(row.querySelector('[name="agentCalls"]').value);
             const score = parseFloat(row.querySelector('[name="agentScore"]').value);
             const tmaStr = row.querySelector('[name="agentTma"]').value;
-
+            
             if (name && !isNaN(calls) && !isNaN(score) && tmaStr) {
-                AppState.agentsData.push({ name, calls, score, tmaStr });
+                const tmaSeconds = parseTmaToSeconds(tmaStr);
+                AppState.agentsData.push({ name, calls, score, tmaStr, tmaSeconds });
                 totalScoreSum += score;
+                totalCalls += calls;
+                totalTmaSeconds += tmaSeconds;
             }
         });
 
@@ -191,25 +138,12 @@
         }
         
         AppState.goals.teamAverageNote = totalScoreSum / AppState.agentsData.length;
-
-        // 3. Process Data
-        const parseTmaToSeconds = (tmaStr) => {
-             let totalSeconds = 0;
-             const hoursMatch = tmaStr.match(/(\d+)\s*h/);
-             const minutesMatch = tmaStr.match(/(\d+)\s*m/);
-             const secondsMatch = tmaStr.match(/(\d+)\s*s/);
-             if(hoursMatch) totalSeconds += parseInt(hoursMatch[1]) * 3600;
-             if(minutesMatch) totalSeconds += parseInt(minutesMatch[1]) * 60;
-             if(secondsMatch) totalSeconds += parseInt(secondsMatch[1]);
-             return totalSeconds;
-        };
-
-        AppState.agentsData.forEach(agent => { agent.tmaSeconds = parseTmaToSeconds(agent.tmaStr); });
-
+        const averageTmaSeconds = totalTmaSeconds / AppState.agentsData.length;
+        AppState.teamTotals = { totalCalls, averageTmaStr: formatSecondsToTma(averageTmaSeconds) };
+        
         const calls = AppState.agentsData.map(a => a.calls);
         const scores = AppState.agentsData.map(a => a.score);
         const tmas = AppState.agentsData.map(a => a.tmaSeconds);
-
         const minCalls = Math.min(...calls), maxCalls = Math.max(...calls);
         const minScore = Math.min(...scores), maxScore = Math.max(...scores);
         const minTma = Math.min(...tmas), maxTma = Math.max(...tmas);
@@ -225,147 +159,40 @@
         });
 
         AppState.agentsData.sort((a, b) => b.scoreGeral - a.scoreGeral);
-        renderDashboard(AppState.agentsData, AppState.reportTitle, AppState.goals);
+        renderDashboard(AppState.agentsData, AppState.reportTitle, AppState.goals, AppState.teamTotals);
         
         document.getElementById('form-container').style.display = 'none';
         document.getElementById('dashboard-container').style.display = 'block';
     });
+
+    const parseTmaToSeconds = (tmaStr) => {
+         let totalSeconds = 0;
+         const hoursMatch = tmaStr.match(/(\d+)\s*h/);
+         const minutesMatch = tmaStr.match(/(\d+)\s*m/);
+         const secondsMatch = tmaStr.match(/(\d+)\s*s/);
+         if(hoursMatch) totalSeconds += parseInt(hoursMatch[1]) * 3600;
+         if(minutesMatch) totalSeconds += parseInt(minutesMatch[1]) * 60;
+         if(secondsMatch) totalSeconds += parseInt(secondsMatch[1]);
+         return totalSeconds;
+    };
     
-    // --- GEMINI API FUNCTIONS ---
-    async function callGemini(prompt) {
-        let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-        const payload = { contents: chatHistory };
-        const apiKey = "";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-        
-        try {
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (!response.ok) {
-                throw new Error(`API error: ${response.statusText}`);
-            }
-            const result = await response.json();
-            if (result.candidates && result.candidates[0] && result.candidates[0].content) {
-                return result.candidates[0].content.parts[0].text;
-            } else {
-                return "Não foi possível obter uma resposta da IA. A resposta estava vazia.";
-            }
-        } catch (error) {
-            console.error("Error calling Gemini API:", error);
-            return `Erro ao contatar a IA: ${error.message}. Verifique o console para mais detalhes.`;
-        }
-    }
-
-    async function generateAIAnalysis() {
-        const button = document.getElementById('generate-ai-analysis-btn');
-        const container = document.getElementById('ai-analysis-section');
-        const contentDiv = document.getElementById('ai-analysis-content');
-        
-        button.disabled = true;
-        button.innerHTML = '<div class="spinner mx-auto"></div>';
-        container.style.display = 'block';
-        contentDiv.innerHTML = '';
-        
-        const { agentsData, goals, reportTitle } = AppState;
-        
-        const agentsDataString = agentsData.map(a => `- ${a.name}: ${a.calls} atend., Nota ${a.score.toFixed(2)}, TMA ${a.tmaStr}, Score Geral ${a.scoreGeral}`).join('\n');
-        
-        const prompt = `
-            Você é um especialista em gestão de performance de call centers. Analise os seguintes dados de uma equipe para o "${reportTitle}" e gere um relatório de análise de desempenho em português.
-
-            Metas do Mês:
-            - Nota Média da Equipe: >= ${goals.goalNote}
-            - TMA (Tempo Médio de Atendimento): <= ${goals.goalTma} minutos
-            - Atendimentos Individuais: >= ${goals.goalCalls}
-
-            Resultado Geral da Equipe:
-            - Nota Média Alcançada: ${goals.teamAverageNote.toFixed(2)}
-
-            Dados Individuais:
-            ${agentsDataString}
-
-            O relatório deve ser conciso e ter a seguinte estrutura, usando **título em negrito** para cada seção:
-
-            **Análise Geral da Equipe**
-            Um parágrafo resumindo o desempenho geral da equipe em relação às metas do mês, destacando o principal ponto de sucesso e o principal desafio.
-
-            **Pontos Fortes da Equipe**
-            Liste em 2 ou 3 tópicos os principais pontos positivos observados no desempenho coletivo.
-
-            **Oportunidades de Melhoria**
-            Liste em 2 ou 3 tópicos as áreas que precisam de mais atenção. Dê sugestões práticas e diretas.
-
-            **Destaques Individuais**
-            Mencione o colaborador com o maior Score Geral e explique brevemente o porquê. Se houver alguém que bateu todas as metas, mencione também.
-
-            **Conclusão e Próximos Passos**
-            Um parágrafo final com uma conclusão e 1 ou 2 sugestões de próximos passos para o gestor.
-        `;
-        
-        const responseText = await callGemini(prompt);
-        const formattedResponse = responseText.replace(/\*\*(.*?)\*\*/g, '<h4 class="font-bold text-lg text-gray-800 mt-4 mb-2">$1</h4>').replace(/\n/g, '<br>');
-        
-        contentDiv.innerHTML = formattedResponse;
-        button.innerHTML = '✨ Gerar Análise com IA';
-        button.disabled = false;
-    }
-
-    async function generatePersonalizedFeedback(agentIndex) {
-        const modal = document.getElementById('feedback-modal');
-        const modalBody = document.getElementById('modal-body');
-        const modalTitle = document.getElementById('modal-title');
-        
-        const agent = AppState.agentsData[agentIndex];
-        const { goals } = AppState;
-        
-        modalTitle.innerText = `Feedback para ${agent.name}`;
-        modalBody.innerHTML = '<div class="flex justify-center items-center p-8"><div class="spinner"></div></div>';
-        modal.classList.remove('hidden');
-        
-        const callsOk = agent.calls >= goals.goalCalls;
-        const noteOk = agent.score >= goals.goalNote;
-        const tmaOk = (agent.tmaSeconds / 60) <= goals.goalTma;
-
-        const prompt = `
-            Você é um gerente de call center preparando uma conversa de feedback 1-a-1 com um colaborador. Gere um roteiro de feedback construtivo e encorajador em português para o(a) atendente ${agent.name}, baseado nos seus resultados.
-
-            Metas do Mês:
-            - Atendimentos: >= ${goals.goalCalls}
-            - Nota: >= ${goals.goalNote}
-            - TMA: <= ${goals.goalTma} minutos
-
-            Resultados de ${agent.name}:
-            - Atendimentos: ${agent.calls} (Meta batida: ${callsOk ? 'Sim' : 'Não'})
-            - Nota: ${agent.score.toFixed(2)} (Meta batida: ${noteOk ? 'Sim' : 'Não'})
-            - TMA: ${agent.tmaStr} (Meta batida: ${tmaOk ? 'Sim' : 'Não'})
-            - Posição no Ranking: ${agentIndex + 1}º
-
-            O roteiro deve ter a seguinte estrutura, usando **título em negrito**:
-
-            **Pontos Positivos**
-            Comece elogiando 1 ou 2 pontos fortes específicos de ${agent.name} com base nos dados. Seja específico.
-
-            **Ponto de Desenvolvimento**
-            Identifique a principal área onde ${agent.name} pode melhorar. Apresente o ponto de forma construtiva e sugira uma ação prática.
-
-            **Mensagem Final**
-            Termine com uma mensagem de encorajamento, reforçando a confiança no potencial do colaborador.
-        `;
-
-        const responseText = await callGemini(prompt);
-        const formattedResponse = responseText.replace(/\*\*(.*?)\*\*/g, '<h4 class="font-bold text-gray-800 mt-3 mb-1">$1</h4>').replace(/\n/g, '<br>');
-        modalBody.innerHTML = formattedResponse;
-    }
-
-
-    // --- RENDERING FUNCTIONS ---
+    const formatSecondsToTma = (totalSeconds) => {
+        if (isNaN(totalSeconds) || totalSeconds === 0) return '0m 0s';
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.round(totalSeconds % 60);
+        let result = '';
+        if (hours > 0) result += `${hours}h `;
+        if (minutes > 0 || hours > 0) result += `${minutes}m `;
+        result += `${seconds}s`;
+        return result.trim();
+    };
+    
     const getScoreColorClass = (score) => {
         if (score >= 100) return 'score-100'; if (score >= 80) return 'score-80-99'; if (score >= 60) return 'score-60-79';
         if (score >= 40) return 'score-40-59'; if (score >= 20) return 'score-20-39'; return 'score-0-19';
     };
+    
     const getRankingBadge = (index) => {
         if (index === 0) return `<div class="flex items-center justify-center h-8 w-8 rounded-full text-white font-bold gradient-gold shadow-md">1º</div>`;
         if (index === 1) return `<div class="flex items-center justify-center h-8 w-8 rounded-full text-white font-bold gradient-silver shadow-md">2º</div>`;
@@ -373,7 +200,7 @@
         return `<div class="flex items-center justify-center h-8 w-8 rounded-full bg-gray-400 text-white font-bold shadow-md">${index + 1}º</div>`;
     };
 
-    const renderDashboard = (agents, title, goals) => {
+    const renderDashboard = (agents, title, goals, teamTotals) => {
         const container = document.getElementById('dashboard-content');
         
         let dashboardHTML = `
@@ -387,56 +214,99 @@
             <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
                 <h2 class="text-2xl font-bold text-gray-700 mb-4">Análise de Metas da Equipe</h2>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-                    <div class="${noteMetaOk ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} p-4 rounded-lg border-2 border-dashed"><h4 class="font-semibold text-gray-600">Média de Nota</h4><p class="text-3xl font-bold ${noteMetaOk ? 'text-green-500' : 'text-red-500'} my-2">${goals.teamAverageNote.toFixed(2)}</p><p class="text-sm text-gray-500">Meta: >= ${goals.goalNote.toFixed(2)} <span class="font-bold ${noteMetaOk ? 'meta-ok' : 'meta-bad'}">(${noteMetaOk ? 'Atingida' : 'Não Atingida'})</span></p></div>
-                    <div class="${allTmaOk ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} p-4 rounded-lg border-2 border-dashed"><h4 class="font-semibold text-gray-600">TMA Individual</h4><p class="text-3xl font-bold ${allTmaOk ? 'text-green-500' : 'text-red-500'} my-2">100%</p><p class="text-sm text-gray-500">Abaixo de ${goals.goalTma} min <span class="font-bold ${allTmaOk ? 'meta-ok' : 'meta-bad'}">(${allTmaOk ? 'Atingida' : 'Não Atingida'})</span></p></div>
-                    <div class="${allCallsOk ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'} p-4 rounded-lg border-2 border-dashed"><h4 class="font-semibold text-gray-600">Atend. Individuais</h4><p class="text-3xl font-bold ${allCallsOk ? 'text-green-500' : 'text-red-500'} my-2">100%</p><p class="text-sm text-gray-500">Acima de ${goals.goalCalls} <span class="font-bold ${allCallsOk ? 'meta-ok' : 'meta-bad'}">(${allCallsOk ? 'Atingida' : 'Não Atingida'})</span></p></div>
+                    <div class="${noteMetaOk ? 'bg-green-50' : 'bg-red-50'} p-4 rounded-lg border-2 border-dashed ${noteMetaOk ? 'border-green-200' : 'border-red-200'}"><h4 class="font-semibold text-gray-600">Média de Nota</h4><p class="text-3xl font-bold ${noteMetaOk ? 'text-green-500' : 'text-red-500'} my-2">${goals.teamAverageNote.toFixed(2)}</p><p class="text-sm text-gray-500">Meta: >= ${goals.goalNote.toFixed(2)} <span class="font-bold ${noteMetaOk ? 'meta-ok' : 'meta-bad'}">(${noteMetaOk ? 'Atingida' : 'Não Atingida'})</span></p></div>
+                    <div class="${allTmaOk ? 'bg-green-50' : 'bg-red-50'} p-4 rounded-lg border-2 border-dashed ${allTmaOk ? 'border-green-200' : 'border-red-200'}"><h4 class="font-semibold text-gray-600">TMA Individual</h4><p class="text-3xl font-bold ${allTmaOk ? 'text-green-500' : 'text-red-500'} my-2">100%</p><p class="text-sm text-gray-500">Abaixo de ${goals.goalTma} min <span class="font-bold ${allTmaOk ? 'meta-ok' : 'meta-bad'}">(${allTmaOk ? 'Atingida' : 'Não Atingida'})</span></p></div>
+                    <div class="${allCallsOk ? 'bg-green-50' : 'bg-red-50'} p-4 rounded-lg border-2 border-dashed ${allCallsOk ? 'border-green-200' : 'border-red-200'}"><h4 class="font-semibold text-gray-600">Atend. Individuais</h4><p class="text-3xl font-bold ${allCallsOk ? 'text-green-500' : 'text-red-500'} my-2">100%</p><p class="text-sm text-gray-500">Acima de ${goals.goalCalls} <span class="font-bold ${allCallsOk ? 'meta-ok' : 'meta-bad'}">(${allCallsOk ? 'Atingida' : 'Não Atingida'})</span></p></div>
                 </div>
             </div>`;
 
-        let tableRowsHTML = '';
+        let tableBodyHTML = '';
         agents.forEach((agent, index) => {
             const callsOk = agent.calls >= goals.goalCalls, noteOk = agent.score >= goals.goalNote, tmaOk = (agent.tmaSeconds / 60) <= goals.goalTma;
-            tableRowsHTML += `<tr class="bg-white border-b hover:bg-gray-50">
+            tableBodyHTML += `<tr class="bg-white border-b hover:bg-gray-50">
                     <td class="px-4 py-4">${getRankingBadge(index)}</td>
                     <td class="px-4 py-4 font-semibold text-gray-900">${agent.name}</td>
-                    <td class="px-4 py-4 text-center">${agent.calls}</td><td class="px-4 py-4 text-center">${agent.score.toFixed(2)}</td><td class="px-4 py-4 text-center">${agent.tmaStr}</td>
+                    <td class="px-4 py-4 text-center text-gray-600">${agent.calls}</td><td class="px-4 py-4 text-center text-gray-600">${agent.score.toFixed(2)}</td><td class="px-4 py-4 text-center text-gray-600">${agent.tmaStr}</td>
                     <td class="px-2 py-4 text-center font-bold text-xl ${callsOk ? 'meta-ok' : 'meta-bad'}">${callsOk ? '✓' : '✗'}</td>
                     <td class="px-2 py-4 text-center font-bold text-xl ${noteOk ? 'meta-ok' : 'meta-bad'}">${noteOk ? '✓' : '✗'}</td>
                     <td class="px-2 py-4 text-center font-bold text-xl ${tmaOk ? 'meta-ok' : 'meta-bad'}">${tmaOk ? '✓' : '✗'}</td>
                     <td class="px-4 py-4 text-center"><div class="${getScoreColorClass(agent.scoreGeral)} rounded-md p-1 font-bold">${agent.scoreGeral}</div></td>
-                    <td class="px-4 py-4 text-center"><button onclick="generatePersonalizedFeedback(${index})" class="px-2 py-1 text-xs font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">✨ Gerar Feedback</button></td>
                 </tr>`;
         });
+        
+        tableBodyHTML += `
+            <tr class="bg-gray-200 font-bold text-gray-800 border-t-2 border-gray-300">
+                <td class="px-4 py-3" colspan="2">TOTAL EQUIPE (PATRICK)</td>
+                <td class="px-4 py-3 text-center">${teamTotals.totalCalls}</td>
+                <td class="px-4 py-3 text-center">${goals.teamAverageNote.toFixed(2)}</td>
+                <td class="px-4 py-3 text-center">${teamTotals.averageTmaStr}</td>
+                <td class="px-2 py-3 text-center" colspan="4"></td>
+            </tr>
+        `;
+
         dashboardHTML += `<div class="bg-white rounded-xl shadow-lg p-6 mb-8 overflow-x-auto"><h2 class="text-2xl font-bold text-gray-700 mb-4">Ranking Geral e Análise de Scores</h2><table class="w-full text-sm text-left text-gray-500"><thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr>
                             <th class="px-4 py-3 rounded-l-lg">Ranking</th><th class="px-4 py-3">Atendente</th><th class="px-4 py-3 text-center">Atend.</th><th class="px-4 py-3 text-center">Nota</th><th class="px-4 py-3 text-center">TMA</th>
                             <th class="px-2 py-3 text-center" title="Meta Atend. >= ${goals.goalCalls}">Meta Atend.</th><th class="px-2 py-3 text-center" title="Meta Nota >= ${goals.goalNote}">Meta Nota</th><th class="px-2 py-3 text-center" title="Meta TMA <= ${goals.goalTma} min">Meta TMA</th>
-                            <th class="px-4 py-3 text-center">Score Geral</th><th class="px-4 py-3 text-center rounded-r-lg">Ação com IA</th>
-                        </tr></thead><tbody>${tableRowsHTML}</tbody></table></div>`;
+                            <th class="px-4 py-3 text-center rounded-r-lg">Score Geral</th>
+                        </tr></thead><tbody>${tableBodyHTML}</tbody></table></div>`;
         
+        let podiumHTML = '';
+        const podiumColors = ['bg-green-500', 'bg-yellow-400', 'bg-yellow-500', 'bg-orange-400', 'bg-red-400'];
+        const textColors = ['text-white', 'text-gray-800', 'text-white', 'text-white', 'text-white'];
+        
+        agents.slice(0, 5).forEach((agent, index) => {
+            podiumHTML += `
+            <div class="flex items-center">
+                <div class="font-bold text-gray-600 mr-2">${index + 1}º</div>
+                <div class="flex-1 bg-gray-200 rounded-full h-8">
+                    <div class="${podiumColors[index % podiumColors.length]} h-8 rounded-full flex items-center justify-between px-3" style="width: ${Math.max(parseFloat(agent.scoreGeral), 5)}%;">
+                        <span class="font-semibold ${textColors[index % textColors.length]}">${agent.name}</span>
+                        <span class="font-bold ${textColors[index % textColors.length]}">${agent.scoreGeral}</span>
+                    </div>
+                </div>
+            </div>`;
+        });
+
+        const topPerformer = agents[0];
+        const allGoalsAchiever = agents.find(a => a.calls >= goals.goalCalls && a.score >= goals.goalNote && (a.tmaSeconds/60) <= goals.goalTma);
+
+        let highlightsHTML = `
+            <div class="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-500">
+                <h4 class="font-bold text-yellow-800">⚠️ Ponto de Foco Principal: QUALIDADE</h4>
+                <p class="text-sm text-yellow-700 mt-1">A equipe ${noteMetaOk ? 'atingiu' : '<strong>não atingiu</strong>'} a meta de nota média (${goals.teamAverageNote.toFixed(2)} vs ${goals.goalNote}). Apenas ${agents.filter(a => a.score >= goals.goalNote).length} atendente(s) bateram a meta individual.</p>
+            </div>
+            <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                <h4 class="font-bold text-blue-800">🏆 Perfil "Potência Total": ${topPerformer.name.toUpperCase()}</h4>
+                <p class="text-sm text-blue-700 mt-1">Lidera o ranking geral, dominando em Produtividade e/ou Eficiência. Referência de performance para a equipe.</p>
+            </div>
+        `;
+        if(allGoalsAchiever){
+            highlightsHTML += `
+            <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                <h4 class="font-bold text-green-800">⭐ Desempenho Completo: ${allGoalsAchiever.name.toUpperCase()}</h4>
+                <p class="text-sm text-green-700 mt-1">Foi o único profissional que atingiu <strong>todas as três metas</strong>, demonstrando um excelente equilíbrio. Seu método deve ser estudado.</p>
+            </div>`;
+        }
+
+
         dashboardHTML += `
-            <div id="ai-analysis-container" class="text-center mb-8">
-                <button id="generate-ai-analysis-btn" onclick="generateAIAnalysis()" class="px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700">✨ Gerar Análise de Desempenho com IA</button>
-                <div id="ai-analysis-section" class="mt-6 bg-white rounded-xl shadow-lg p-6 text-left">
-                    <div id="ai-analysis-content" class="prose max-w-none"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-700 mb-4">Pódio: Score Geral</h3>
+                    <div class="space-y-4">${podiumHTML}</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-700 mb-4">Conclusões e Pontos de Foco</h3>
+                    <div class="space-y-4">${highlightsHTML}</div>
                 </div>
             </div>`;
         
         container.innerHTML = dashboardHTML;
-        document.getElementById('ai-analysis-section').style.display = 'none'; // Ensure it's hidden initially
     };
     
-    // Event listeners for modal and navigation
     document.getElementById('edit-data-btn').addEventListener('click', () => {
         document.getElementById('form-container').style.display = 'block';
         document.getElementById('dashboard-container').style.display = 'none';
-    });
-    document.getElementById('close-modal-btn').addEventListener('click', () => {
-        document.getElementById('feedback-modal').classList.add('hidden');
-    });
-    window.addEventListener('click', (e) => {
-        if (e.target.id === 'feedback-modal') {
-            document.getElementById('feedback-modal').classList.add('hidden');
-        }
     });
 
 </script>
